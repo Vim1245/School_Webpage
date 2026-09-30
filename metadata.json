@@ -1,0 +1,6 @@
+{
+  "name": "MNJUA International School Portal",
+  "description": "Modern school portal with Supabase database integration, Express backend, student/parent portal, admissions, notices, faculty showcase, AI assistant, and local setup guide.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
