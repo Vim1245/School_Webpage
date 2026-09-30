@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Sparkles, Send, CheckCircle, FileText, User, Mail, Phone, MapPin, Calendar, Database } from 'lucide-react';
+import { Sparkles, Send, CheckCircle, FileText, User, Mail, Phone, MapPin, Calendar, Database, AlertCircle } from 'lucide-react';
 import { SupabaseConfigStatus } from '../types';
+import { getSupabaseClient } from '../lib/supabase';
 
 interface AdmissionFormProps {
   supabaseStatus: SupabaseConfigStatus | null;
@@ -17,35 +18,94 @@ export const AdmissionForm: React.FC<AdmissionFormProps> = ({ supabaseStatus }) 
 
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setErrorMessage(null);
 
+    const submissionPayload = {
+      student_name: studentName.trim(),
+      dob: dob || new Date().toISOString().split('T')[0],
+      grade_applying: gradeApplying,
+      parent_name: parentName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      address: address.trim() || '',
+      status: 'Pending',
+    };
+
+    let savedData: any = null;
+    let savedInDatabase = false;
+
+    // PATH 1: Try backend API (/api/admissions)
     try {
       const res = await fetch('/api/admissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentName,
-          dob,
-          gradeApplying,
-          parentName,
-          email,
-          phone,
-          address,
+          studentName: submissionPayload.student_name,
+          dob: submissionPayload.dob,
+          gradeApplying: submissionPayload.grade_applying,
+          parentName: submissionPayload.parent_name,
+          email: submissionPayload.email,
+          phone: submissionPayload.phone,
+          address: submissionPayload.address,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setSubmittedData(data);
+        if (data.supabaseSynced && data.data) {
+          savedData = data;
+          savedInDatabase = true;
+        }
       }
-    } catch (err) {
-      console.error('Error submitting application:', err);
-    } finally {
-      setSubmitting(false);
+    } catch (apiErr) {
+      console.warn('Backend /api/admissions call not available, falling back to direct database insertion:', apiErr);
     }
+
+    // PATH 2: Direct Supabase client insertion (ensures production & static deployments write to the database)
+    if (!savedInDatabase) {
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('admissions')
+            .insert([submissionPayload])
+            .select('*');
+
+          if (!error && data && data[0]) {
+            savedData = {
+              success: true,
+              applicationNumber: data[0].id,
+              message: 'Application submitted successfully & saved to your Supabase Admissions table!',
+              data: data[0],
+              supabaseSynced: true,
+            };
+            savedInDatabase = true;
+          } else if (error) {
+            console.error('Supabase direct admission insert error:', error);
+            setErrorMessage(`Failed to save application to database: ${error.message}`);
+          }
+        } else {
+          setErrorMessage('Database connection could not be established. Please check Supabase credentials.');
+        }
+      } catch (dbErr: any) {
+        console.error('Database connection error:', dbErr);
+        setErrorMessage(`Database error: ${dbErr.message || 'Could not connect to database.'}`);
+      }
+    }
+
+    if (savedInDatabase && savedData) {
+      setSubmittedData(savedData);
+      setErrorMessage(null);
+    } else if (!errorMessage) {
+      setErrorMessage('Could not record application in the database. Please try again.');
+    }
+
+    setSubmitting(false);
   };
 
   return (
@@ -120,12 +180,17 @@ export const AdmissionForm: React.FC<AdmissionFormProps> = ({ supabaseStatus }) 
           <div className="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-[#1E293B] pb-4">
             <span className="flex items-center gap-1.5 font-medium">
               <Database className="w-4 h-4 text-emerald-400" />
-              {supabaseStatus?.configured
-                ? 'Submissions auto-sync with Supabase Table "admissions"'
-                : 'Submissions process via Local Express API'}
+              Submissions sync directly with production Supabase Table "admissions"
             </span>
             <span className="font-semibold text-rose-400">* Required Fields</span>
           </div>
+
+          {errorMessage && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-3 text-xs font-mono">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Student Section */}

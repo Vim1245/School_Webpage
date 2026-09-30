@@ -11,10 +11,10 @@ import { INITIAL_NOTICES, ACADEMIC_PROGRAMS, FACULTY_MEMBERS, DEMO_STUDENT_RECOR
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // In-Memory Storage for Fallback Mode
@@ -263,50 +263,26 @@ app.post('/api/contact', async (req, res) => {
           supabaseSynced: true,
         });
       } else if (error) {
-        console.error('Supabase contact message insert error:', error.message, error.details, error.hint);
-        const fallbackContact = {
-          id: 'c-' + Date.now(),
-          name,
-          email,
-          phone: phone || '',
-          subject: subject || 'General Inquiry',
-          message,
-          created_at: new Date().toISOString(),
+        console.error('Supabase contact message insert error:', error.message, error.details);
+        return res.status(500).json({
+          success: false,
+          error: `Database insert failed: ${error.message}`,
           supabaseSynced: false,
-          needsSchema: error.code === 'PGRST205',
-        };
-        inMemoryContacts.push(fallbackContact);
-        return res.status(201).json({
-          success: true,
-          message: error.code === 'PGRST205'
-            ? 'Message received! (Saved in local server because Supabase table "contact_messages" has not been created yet in SQL editor).'
-            : `Message received! (Saved locally: ${error.message})`,
-          data: fallbackContact,
-          supabaseSynced: false,
-          needsSchema: error.code === 'PGRST205',
         });
       }
     } catch (err: any) {
       console.warn('Failed to insert contact message into Supabase:', err.message);
+      return res.status(500).json({
+        success: false,
+        error: `Database connection error: ${err.message}`,
+        supabaseSynced: false,
+      });
     }
   }
 
-  const fallbackContact = {
-    id: 'c-' + Date.now(),
-    name,
-    email,
-    phone: phone || '',
-    subject: subject || 'General Inquiry',
-    message,
-    created_at: new Date().toISOString(),
-    supabaseSynced: false,
-  };
-
-  inMemoryContacts.push(fallbackContact);
-  res.status(201).json({
-    success: true,
-    message: 'Thank you! Your message has been received by MNJUA School Office (Saved locally).',
-    data: fallbackContact,
+  return res.status(500).json({
+    success: false,
+    error: 'Database connection is not configured.',
     supabaseSynced: false,
   });
 });
@@ -349,58 +325,26 @@ app.post('/api/admissions', async (req, res) => {
           supabaseSynced: true,
         });
       } else if (error) {
-        console.error('Supabase admission insert error:', error.message, error.details, error.hint);
-        const fallbackApp = {
-          id: 'adm-' + Date.now(),
-          student_name: studentName,
-          dob,
-          grade_applying: gradeApplying,
-          parent_name: parentName,
-          email,
-          phone,
-          address,
-          status: 'Pending',
-          created_at: new Date().toISOString(),
+        console.error('Supabase admission insert error:', error.message, error.details);
+        return res.status(500).json({
+          success: false,
+          error: `Database insert failed: ${error.message}`,
           supabaseSynced: false,
-          needsSchema: error.code === 'PGRST205',
-        };
-        inMemoryAdmissions.push(fallbackApp);
-        return res.status(201).json({
-          success: true,
-          applicationNumber: fallbackApp.id,
-          message: error.code === 'PGRST205'
-            ? 'Application received! Notice: Supabase table "admissions" is not created yet, so application was saved in local memory. Run the SQL schema in Supabase SQL editor to store in Supabase.'
-            : `Application submitted! (Local fallback: ${error.message})`,
-          data: fallbackApp,
-          supabaseSynced: false,
-          needsSchema: error.code === 'PGRST205',
         });
       }
     } catch (err: any) {
-      console.warn('Failed to insert admission into Supabase:', err.message);
+      console.error('Failed to insert admission into Supabase:', err.message);
+      return res.status(500).json({
+        success: false,
+        error: `Database connection error: ${err.message}`,
+        supabaseSynced: false,
+      });
     }
   }
 
-  const fallbackApp = {
-    id: 'adm-' + Date.now(),
-    student_name: studentName,
-    dob,
-    grade_applying: gradeApplying,
-    parent_name: parentName,
-    email,
-    phone,
-    address,
-    status: 'Pending',
-    created_at: new Date().toISOString(),
-    supabaseSynced: false,
-  };
-
-  inMemoryAdmissions.push(fallbackApp);
-  res.status(201).json({
-    success: true,
-    applicationNumber: fallbackApp.id,
-    message: 'Application submitted successfully! (Saved in local server memory)',
-    data: fallbackApp,
+  return res.status(500).json({
+    success: false,
+    error: 'Database client not initialized. Please verify database connection.',
     supabaseSynced: false,
   });
 });

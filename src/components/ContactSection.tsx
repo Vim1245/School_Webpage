@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle, Database } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, CheckCircle, Database, AlertCircle } from 'lucide-react';
 import { SupabaseConfigStatus } from '../types';
+import { getSupabaseClient } from '../lib/supabase';
 
 interface ContactSectionProps {
   supabaseStatus: SupabaseConfigStatus | null;
@@ -15,30 +16,74 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ supabaseStatus }
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setErrorMessage(null);
 
+    let saved = false;
+
+    // PATH 1: Try backend API (/api/contact)
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, subject, message }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), subject, message: message.trim() }),
       });
 
       if (res.ok) {
-        setSubmitted(true);
-        setName('');
-        setEmail('');
-        setPhone('');
-        setMessage('');
+        const data = await res.json();
+        if (data.supabaseSynced) {
+          saved = true;
+        }
       }
     } catch (err) {
-      console.error('Error submitting contact form:', err);
-    } finally {
-      setSubmitting(false);
+      console.warn('Backend /api/contact unavailable, proceeding with direct database sync:', err);
     }
+
+    // PATH 2: Direct Supabase client insertion (for deployed/static environments)
+    if (!saved) {
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('contact_messages')
+            .insert([{
+              name: name.trim(),
+              email: email.trim(),
+              phone: phone.trim() || '',
+              subject: subject || 'General Inquiry',
+              message: message.trim(),
+            }])
+            .select('*');
+
+          if (!error && data && data[0]) {
+            saved = true;
+          } else if (error) {
+            console.error('Supabase contact insert error:', error);
+            setErrorMessage(`Failed to submit message: ${error.message}`);
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('Direct database contact error:', dbErr);
+        setErrorMessage(`Database error: ${dbErr.message || 'Could not connect to database.'}`);
+      }
+    }
+
+    if (saved) {
+      setSubmitted(true);
+      setName('');
+      setEmail('');
+      setPhone('');
+      setMessage('');
+      setErrorMessage(null);
+    } else if (!errorMessage) {
+      setErrorMessage('Could not send message to database. Please check your connection and try again.');
+    }
+
+    setSubmitting(false);
   };
 
   return (
@@ -142,7 +187,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ supabaseStatus }
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
+              {errorMessage && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-3 text-xs font-mono">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono text-slate-400 mb-1">
@@ -228,6 +280,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ supabaseStatus }
                 <span>{submitting ? 'Sending Message...' : 'Send Inquiry Message'}</span>
               </button>
             </form>
+            </div>
           )}
         </div>
       </div>
