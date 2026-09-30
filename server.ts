@@ -254,19 +254,46 @@ app.post('/api/contact', async (req, res) => {
         ])
         .select('*');
 
-      if (!error && data && data[0]) {
-        console.log('Successfully inserted contact message into Supabase:', data[0].id);
+      let insertRes = await client
+        .from('contact_messages')
+        .insert([
+          {
+            name,
+            email,
+            phone: phone || '',
+            subject: subject || 'General Inquiry',
+            message,
+          },
+        ])
+        .select('*');
+
+      if (insertRes.error && insertRes.error.code === '42501') {
+        insertRes = await client
+          .from('contact_messages')
+          .insert([
+            {
+              name,
+              email,
+              phone: phone || '',
+              subject: subject || 'General Inquiry',
+              message,
+            },
+          ]);
+      }
+
+      if (!insertRes.error) {
+        console.log('Successfully inserted contact message into Supabase');
         return res.status(201).json({
           success: true,
           message: 'Thank you! Your message has been saved to your Supabase database.',
-          data: data[0],
+          data: insertRes.data && insertRes.data[0] ? insertRes.data[0] : { id: 'c-' + Date.now() },
           supabaseSynced: true,
         });
-      } else if (error) {
-        console.error('Supabase contact message insert error:', error.message, error.details);
+      } else {
+        console.error('Supabase contact message insert error:', insertRes.error.message);
         return res.status(500).json({
           success: false,
-          error: `Database insert failed: ${error.message}`,
+          error: `Database insert failed: ${insertRes.error.message}`,
           supabaseSynced: false,
         });
       }
@@ -298,37 +325,44 @@ app.post('/api/admissions', async (req, res) => {
   const client = getSupabaseServerClient();
   if (client) {
     try {
-      // NOTE: Do NOT pass client-side generated string 'id' because Supabase id column is UUID type
-      const { data, error } = await client
+      const admissionRow = {
+        student_name: studentName,
+        dob: dob || new Date().toISOString().split('T')[0],
+        grade_applying: gradeApplying,
+        parent_name: parentName,
+        email: email,
+        phone: phone,
+        address: address || '',
+        status: 'Pending',
+      };
+
+      // Try insert with select; if RLS restricts select for public clients, retry pure insert
+      let insertResult = await client
         .from('admissions')
-        .insert([
-          {
-            student_name: studentName,
-            dob: dob || new Date().toISOString().split('T')[0],
-            grade_applying: gradeApplying,
-            parent_name: parentName,
-            email: email,
-            phone: phone,
-            address: address || '',
-            status: 'Pending',
-          },
-        ])
+        .insert([admissionRow])
         .select('*');
 
-      if (!error && data && data[0]) {
-        console.log('Successfully inserted admission into Supabase:', data[0].id);
+      if (insertResult.error && insertResult.error.code === '42501') {
+        insertResult = await client
+          .from('admissions')
+          .insert([admissionRow]);
+      }
+
+      if (!insertResult.error) {
+        const appId = insertResult.data && insertResult.data[0]?.id ? insertResult.data[0].id : 'ADM-' + Date.now();
+        console.log('Successfully inserted admission into Supabase:', appId);
         return res.status(201).json({
           success: true,
-          applicationNumber: data[0].id,
+          applicationNumber: appId,
           message: 'Application submitted successfully & saved to your Supabase Admissions table!',
-          data: data[0],
+          data: insertResult.data && insertResult.data[0] ? insertResult.data[0] : { id: appId, ...admissionRow },
           supabaseSynced: true,
         });
-      } else if (error) {
-        console.error('Supabase admission insert error:', error.message, error.details);
+      } else {
+        console.error('Supabase admission insert error:', insertResult.error.message, insertResult.error.details);
         return res.status(500).json({
           success: false,
-          error: `Database insert failed: ${error.message}`,
+          error: `Database insert failed: ${insertResult.error.message}`,
           supabaseSynced: false,
         });
       }

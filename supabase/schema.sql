@@ -146,8 +146,10 @@ DROP POLICY IF EXISTS "Allow public read notices" ON public.notices;
 DROP POLICY IF EXISTS "Allow public insert notices" ON public.notices;
 DROP POLICY IF EXISTS "Allow public read contact" ON public.contact_messages;
 DROP POLICY IF EXISTS "Allow public insert contact" ON public.contact_messages;
+DROP POLICY IF EXISTS "Allow authenticated manage contact" ON public.contact_messages;
 DROP POLICY IF EXISTS "Allow public read admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public insert admissions" ON public.admissions;
+DROP POLICY IF EXISTS "Allow authenticated manage admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public read programs" ON public.programs;
 DROP POLICY IF EXISTS "Allow public read faculty" ON public.faculty;
 DROP POLICY IF EXISTS "Allow public update faculty" ON public.faculty;
@@ -155,16 +157,9 @@ DROP POLICY IF EXISTS "Allow public read students" ON public.students;
 DROP POLICY IF EXISTS "Allow public read student_grades" ON public.student_grades;
 DROP POLICY IF EXISTS "Allow public read student_activities" ON public.student_activities;
 
--- Define Policies
+-- Public Informational Content (Notices, Programs, Faculty)
 CREATE POLICY "Allow public read notices" ON public.notices FOR SELECT USING (true);
 CREATE POLICY "Allow public insert notices" ON public.notices FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow public read contact" ON public.contact_messages FOR SELECT USING (true);
-CREATE POLICY "Allow public insert contact" ON public.contact_messages FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow public read admissions" ON public.admissions FOR SELECT USING (true);
-CREATE POLICY "Allow public insert admissions" ON public.admissions FOR INSERT WITH CHECK (true);
-
 CREATE POLICY "Allow public read programs" ON public.programs FOR SELECT USING (true);
 CREATE POLICY "Allow public read faculty" ON public.faculty FOR SELECT USING (true);
 CREATE POLICY "Allow public update faculty" ON public.faculty FOR UPDATE USING (true) WITH CHECK (true);
@@ -172,15 +167,30 @@ CREATE POLICY "Allow public read students" ON public.students FOR SELECT USING (
 CREATE POLICY "Allow public read student_grades" ON public.student_grades FOR SELECT USING (true);
 CREATE POLICY "Allow public read student_activities" ON public.student_activities FOR SELECT USING (true);
 
--- Grant privileges to anon and authenticated clients
+-- SECURE ADMISSIONS POLICIES:
+-- 1. Public Anonymous Visitors: Can submit/INSERT applications, but CANNOT view, edit, or delete others' data
+CREATE POLICY "Allow public insert admissions" ON public.admissions FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+-- 2. Authenticated Owners/Admins: Full permissions to view, review, update status, and manage all applications
+CREATE POLICY "Allow authenticated manage admissions" ON public.admissions FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- SECURE CONTACT INQUIRY POLICIES:
+CREATE POLICY "Allow public insert contact" ON public.contact_messages FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage contact" ON public.contact_messages FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Grant appropriate table privileges
 GRANT ALL ON TABLE public.notices TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.contact_messages TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.admissions TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.programs TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.faculty TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.students TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.student_grades TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.student_activities TO anon, authenticated, service_role;
+
+GRANT INSERT ON TABLE public.admissions TO anon;
+GRANT ALL ON TABLE public.admissions TO authenticated, service_role;
+
+GRANT INSERT ON TABLE public.contact_messages TO anon;
+GRANT ALL ON TABLE public.contact_messages TO authenticated, service_role;
 
 -- 6. INITIAL SEED DATA
 INSERT INTO public.notices (title, category, date, content, important, audience)

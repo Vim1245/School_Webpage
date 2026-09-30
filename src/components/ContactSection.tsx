@@ -48,22 +48,30 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ supabaseStatus }
       try {
         const supabase = getSupabaseClient();
         if (supabase) {
-          const { data, error } = await supabase
-            .from('contact_messages')
-            .insert([{
-              name: name.trim(),
-              email: email.trim(),
-              phone: phone.trim() || '',
-              subject: subject || 'General Inquiry',
-              message: message.trim(),
-            }])
-            .select('*');
+          const contactRow = {
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone.trim() || '',
+            subject: subject || 'General Inquiry',
+            message: message.trim(),
+          };
 
-          if (!error && data && data[0]) {
+          let insertRes = await supabase
+            .from('contact_messages')
+            .insert([contactRow])
+            .select('id');
+
+          if (insertRes.error && (insertRes.error.code === '42501' || insertRes.error.message?.includes('violates row-level security'))) {
+            insertRes = await supabase
+              .from('contact_messages')
+              .insert([contactRow]);
+          }
+
+          if (!insertRes.error) {
             saved = true;
-          } else if (error) {
-            console.error('Supabase contact insert error:', error);
-            setErrorMessage(`Failed to submit message: ${error.message}`);
+          } else {
+            console.error('Supabase contact insert error:', insertRes.error);
+            setErrorMessage(`Failed to submit message: ${insertRes.error.message}`);
           }
         }
       } catch (dbErr: any) {

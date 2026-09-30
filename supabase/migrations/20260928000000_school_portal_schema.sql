@@ -219,8 +219,10 @@ DROP POLICY IF EXISTS "Allow public read notices" ON public.notices;
 DROP POLICY IF EXISTS "Allow public insert notices" ON public.notices;
 DROP POLICY IF EXISTS "Allow public read contact" ON public.contact_messages;
 DROP POLICY IF EXISTS "Allow public insert contact" ON public.contact_messages;
+DROP POLICY IF EXISTS "Allow authenticated manage contact" ON public.contact_messages;
 DROP POLICY IF EXISTS "Allow public read admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public insert admissions" ON public.admissions;
+DROP POLICY IF EXISTS "Allow authenticated manage admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public read programs" ON public.programs;
 DROP POLICY IF EXISTS "Allow public read faculty" ON public.faculty;
 DROP POLICY IF EXISTS "Allow public update faculty" ON public.faculty;
@@ -228,26 +230,26 @@ DROP POLICY IF EXISTS "Allow public read students" ON public.students;
 DROP POLICY IF EXISTS "Allow public read student_grades" ON public.student_grades;
 DROP POLICY IF EXISTS "Allow public read student_activities" ON public.student_activities;
 
--- 1. Notices: Public read-only; insert allowed for authenticated staff and public submission
+-- 1. Notices: Public read-only; insert allowed for staff & portal updates
 CREATE POLICY "Allow public read notices" ON public.notices
   FOR SELECT USING (true);
 
 CREATE POLICY "Allow public insert notices" ON public.notices
   FOR INSERT WITH CHECK (true);
 
--- 2. Contact Inquiries: Anyone can submit inquiries; select permitted
-CREATE POLICY "Allow public read contact" ON public.contact_messages
-  FOR SELECT USING (true);
-
+-- 2. Contact Inquiries: Anyone can submit inquiries (INSERT); authenticated staff can manage (ALL)
 CREATE POLICY "Allow public insert contact" ON public.contact_messages
-  FOR INSERT WITH CHECK (true);
+  FOR INSERT TO anon, authenticated WITH CHECK (true);
 
--- 3. Admissions: Anyone can submit application & verify their status
-CREATE POLICY "Allow public read admissions" ON public.admissions
-  FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated manage contact" ON public.contact_messages
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+-- 3. Admissions: Public anonymous visitors can SUBMIT (INSERT); authenticated owners/admins manage (ALL)
 CREATE POLICY "Allow public insert admissions" ON public.admissions
-  FOR INSERT WITH CHECK (true);
+  FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated manage admissions" ON public.admissions
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 4. Programs: Public read access
 CREATE POLICY "Allow public read programs" ON public.programs

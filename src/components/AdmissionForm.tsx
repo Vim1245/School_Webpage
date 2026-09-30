@@ -71,23 +71,31 @@ export const AdmissionForm: React.FC<AdmissionFormProps> = ({ supabaseStatus }) 
       try {
         const supabase = getSupabaseClient();
         if (supabase) {
-          const { data, error } = await supabase
+          // Attempt insert with select('id'); if RLS denies select for public users (42501), retry insert without select
+          let insertRes = await supabase
             .from('admissions')
             .insert([submissionPayload])
-            .select('*');
+            .select('id');
 
-          if (!error && data && data[0]) {
+          if (insertRes.error && (insertRes.error.code === '42501' || insertRes.error.message?.includes('violates row-level security'))) {
+            insertRes = await supabase
+              .from('admissions')
+              .insert([submissionPayload]);
+          }
+
+          if (!insertRes.error) {
+            const appId = (insertRes.data && insertRes.data[0]?.id) || 'ADM-' + Math.floor(100000 + Math.random() * 900000);
             savedData = {
               success: true,
-              applicationNumber: data[0].id,
+              applicationNumber: appId,
               message: 'Application submitted successfully & saved to your Supabase Admissions table!',
-              data: data[0],
+              data: (insertRes.data && insertRes.data[0]) || { ...submissionPayload, id: appId },
               supabaseSynced: true,
             };
             savedInDatabase = true;
-          } else if (error) {
-            console.error('Supabase direct admission insert error:', error);
-            setErrorMessage(`Failed to save application to database: ${error.message}`);
+          } else {
+            console.error('Supabase direct admission insert error:', insertRes.error);
+            setErrorMessage(`Failed to save application to database: ${insertRes.error.message}`);
           }
         } else {
           setErrorMessage('Database connection could not be established. Please check Supabase credentials.');

@@ -130,23 +130,29 @@ DROP POLICY IF EXISTS "Allow public insert on admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public select on admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public read admissions" ON public.admissions;
 DROP POLICY IF EXISTS "Allow public insert admissions" ON public.admissions;
+DROP POLICY IF EXISTS "Allow authenticated manage admissions" ON public.admissions;
+DROP POLICY IF EXISTS "Allow authenticated manage contact" ON public.contact_messages;
 
 -- Policies for public portal operations
 CREATE POLICY "Allow public read notices" ON public.notices FOR SELECT USING (true);
 CREATE POLICY "Allow public insert notices" ON public.notices FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Allow public read contact" ON public.contact_messages FOR SELECT USING (true);
-CREATE POLICY "Allow public insert contact" ON public.contact_messages FOR INSERT WITH CHECK (true);
+-- Contact messages: Public insert, Authenticated manage
+CREATE POLICY "Allow public insert contact" ON public.contact_messages FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage contact" ON public.contact_messages FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow public read admissions" ON public.admissions FOR SELECT USING (true);
-CREATE POLICY "Allow public insert admissions" ON public.admissions FOR INSERT WITH CHECK (true);
+-- Admissions: Public can submit (INSERT), Authenticated can view & manage (ALL)
+CREATE POLICY "Allow public insert admissions" ON public.admissions FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage admissions" ON public.admissions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- Grant privileges to anon and authenticated clients
 GRANT ALL ON TABLE public.notices TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.contact_messages TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.admissions TO anon, authenticated, service_role;
+GRANT INSERT ON TABLE public.contact_messages TO anon;
+GRANT ALL ON TABLE public.contact_messages TO authenticated, service_role;
+GRANT INSERT ON TABLE public.admissions TO anon;
+GRANT ALL ON TABLE public.admissions TO authenticated, service_role;
 
-SELECT 'Success! All 3 tables created and ready for portal data.' AS status;
+SELECT 'Success! All tables secured and ready for public admission submissions.' AS status;
 `;
 
   return (
